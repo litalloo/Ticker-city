@@ -13,6 +13,8 @@ An interactive stock watch list drawn as a 3D city.
 
 Live page: https://claude.ai/artifact/YA6SqcKgFAT7paumaF8mVg (private to the owner until shared)
 
+Only the owner's account can change data: the database rules set `write: "owner"` on `stocks`, `meta` and `mywatch`, and the page hides add/remove buttons from everyone else.
+
 ## How it fits together
 
 | Piece | Where |

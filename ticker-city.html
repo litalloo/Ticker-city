@@ -217,6 +217,7 @@ let meta = null;
 let current = null;   // district id
 let selected = null;  // ticker
 let db = null;
+let canEdit = false; // only the owner's account can change My Watch
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -258,7 +259,7 @@ function renderRoster(){
   const r = $("#roster"); r.hidden=false; r.style.setProperty("--c",d.color);
   $("#roster-title").innerHTML = `SELECT YOUR FIGHTER · <em>${esc(d.name.toUpperCase())}</em>`;
   $("#roster-sub").textContent = d.blurb || `${list.length} stock${list.length===1?"":"s"} in this district, strongest first.`;
-  $("#addwrap").hidden = current!=="mine";
+  $("#addwrap").hidden = current!=="mine" || !canEdit;
   const cards = list.map(s=>{
     const c = DMAP[s.district]?.color || d.color;
     if(s.pending) return `<button class="card pending" style="--c:${c}" data-t="${esc(s.ticker)}" aria-pressed="${selected===s.ticker}"><div><div class="tk">${esc(s.ticker)}</div><div class="nm">Scouting at next update</div></div><div class="bot">${vpill(null)}</div></button>`;
@@ -268,7 +269,7 @@ function renderRoster(){
       <div><div class="tk">${esc(s.ticker)}</div><div class="nm">${esc(s.name)}</div></div>
       <div class="bot"><span class="px">${fmtPrice(s.price)} ${fmtChg(s.changePct)}</span>${vpill(s.verdict)}</div></button>`;
   });
-  if(current==="mine") cards.push(`<button class="card add" data-add="1"><span class="plus">+</span><span>Add a stock</span></button>`);
+  if(current==="mine" && canEdit) cards.push(`<button class="card add" data-add="1"><span class="plus">+</span><span>Add a stock</span></button>`);
   $("#grid").innerHTML = cards.join("") || `<div class="empty">No stocks here yet. They appear after the next daily update.</div>`;
   renderFighter();
 }
@@ -304,7 +305,7 @@ function renderFighter(){
     el.innerHTML = `<div class="f-top"><div><div class="tk">${esc(s.ticker)}</div><div class="nm">Waiting for its first scouting report</div></div></div>
       <p class="tagline">This ticker is queued. The next daily update looks up its price, runs the fundamentals check, and grades it.</p>
       ${s.note?`<p class="muted">Your note: ${esc(s.note)}</p>`:""}
-      <div class="f-actions">${tvLink(s.ticker)}<button class="btn ghost" data-remove="${esc(s.ticker)}">Remove from My Watch</button></div>`;
+      <div class="f-actions">${tvLink(s.ticker)}${canEdit?`<button class="btn ghost" data-remove="${esc(s.ticker)}">Remove from My Watch</button>`:""}</div>`;
     return;
   }
   const bars = STATS.map(x=>{const g=s.stats?.[x.k]||"?"; const v=GV[g]||0; return `<span>${x.label}</span><span class="bar"><i style="width:${v/6*100}%;background:${GC[g]||"var(--ink-3)"}"></i></span><span class="g" style="color:${GC[g]||"var(--ink-3)"}">${g}</span>`;}).join("");
@@ -324,7 +325,7 @@ function renderFighter(){
     <div class="f-actions">
       <button class="btn" data-dossier="${esc(s.ticker)}">FULL DOSSIER &amp; OUTLOOK</button>
       ${tvLink(s.ticker)}
-      ${inMine?`<button class="btn ghost" data-remove="${esc(s.ticker)}">Remove from My Watch</button>`:`<button class="btn ghost" data-watch="${esc(s.ticker)}">+ Add to My Watch</button>`}
+      ${!canEdit?"":inMine?`<button class="btn ghost" data-remove="${esc(s.ticker)}">Remove from My Watch</button>`:`<button class="btn ghost" data-watch="${esc(s.ticker)}">+ Add to My Watch</button>`}
     </div>`;
 }
 $("#fighter").addEventListener("click",e=>{
@@ -523,6 +524,8 @@ function setStatus(){
 renderChips(); city.build();
 (async()=>{
   try{ db = await (window.claude?.use ? window.claude.use("db") : null); }catch(e){ db=null; }
+  try{ const u = window.claude?.use ? await window.claude.use("user") : null; canEdit = u ? await u.isOwner() : false; }catch(e){ canEdit=false; }
+  scheduleRefresh();
   if(!db){ $("#status-text").textContent="Market data is available when you open this page signed in to claude.ai."; $("#loading").textContent="NO DATA CONNECTION"; $("#loading").hidden=false; return; }
   const slow=setTimeout(()=>{ if(!Object.keys(stocks).length) $("#status-text").textContent="Market data can't be reached yet. It will load when the connection returns."; },10000);
   db.collection("stocks").onSnapshot(snap=>{
